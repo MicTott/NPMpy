@@ -33,23 +33,30 @@ def curate_NPM(path):
     # for each sub directory ...
     for sub in sub_dirs:
         sub_path = os.path.join(path, sub)
+        NPM_415 = []
+        NPM_470 = []
 
         # for each file in sub directory ...
         for file in os.listdir(sub_path):
 
-            if (file.endswith('.npm.csv')): # if directory, skip
 
+            if (file.endswith('.NPM.csv')): # if directory, skip
+
+                display(file)
                 # read csv files
                 data = pd.read_csv(os.path.join(sub_path, file))
-                if 17 in data['Flags'].values: # if Flag contains 17, 415
+                if 1 in data['LedState'].values: # if Flag contains 17, 415
                     NPM_415 = data
-                elif 18 in data['Flags'].values: # if Flag contains 18, 470
-                    NPM_470 = data
-            else:
-                continue
 
-        # curate and save NPM data
-        _curate_NPM_subdir(NPM_415, NPM_470, name=sub, save_path=sub_path)
+                elif 2 in data['LedState'].values: # if Flag contains 18, 470
+                    NPM_470 = data
+
+        if type(NPM_415) == list: # if variable is list (i.e., no dataframe)
+            continue
+
+        else:
+            # curate and save NPM data
+            _curate_NPM_subdir(NPM_415, NPM_470, name=sub, save_path=sub_path)
     return
 
 
@@ -78,7 +85,7 @@ def _curate_NPM_subdir(NPM_415, NPM_470, name, save_path):
     into new .csv files.
     """
 
-    if 17 not in NPM_415['Flags'].values:
+    if 1 not in NPM_415['LedState'].values:
         raise Exception('Flag "17" not found in first input variable. Make sure that 415 and 470 are first and second input variables, respectively.')
 
     NPM_415_short = _drop_preTTL(NPM_415)
@@ -107,8 +114,8 @@ def _drop_preTTL(NPM_df):
         dataframe without the pre-TTL data and reset indexes.
     """
 
-    TTL_idxs = NPM_df.index[NPM_df['Flags'] > 20]
-    First_TTL = TTL_idxs[0]
+    TTL_idxs = NPM_df[NPM_df['Input0'] > 0]
+    First_TTL = TTL_idxs.index[0]
 
     NPM_df_short = NPM_df.iloc[First_TTL-1:].reset_index()
     return NPM_df_short
@@ -142,8 +149,8 @@ def _curate_and_save_NPM(NPM_415_short, NPM_470_short, name, save_path):
     into new .csv file
     """
 
-    regions_415 = NPM_415_short.columns[4:]
-    regions_470 = NPM_470_short.columns[4:]
+    regions_415 = NPM_415_short.columns[9:]
+    regions_470 = NPM_470_short.columns[9:]
     tm.assert_index_equal(regions_415, regions_470)
 
     for region in regions_415:
