@@ -1,4 +1,4 @@
- ====================
+# ====================
 #  Necessary packages
 # ====================
 
@@ -35,43 +35,53 @@ def curate_NPM(path):
         sub_path = os.path.join(path, sub)
         NPM_415 = []
         NPM_470 = []
+        NPM_560 = []
 
         # for each file in sub directory ...
         for file in os.listdir(sub_path):
 
 
-            if (file.endswith('.NPM.csv')): # if directory, skip
+            if (file.lower().endswith('.npm.csv')): # if directory, skip
 
                 display(file)
                 # read csv files
                 data = pd.read_csv(os.path.join(sub_path, file))
-                if 1 in data['LedState'].values: # if Flag contains 17, 415
+                if 1 in data['LedState'].values: # if 1, 415
                     NPM_415 = data
 
-                elif 2 in data['LedState'].values: # if Flag contains 18, 470
+                elif 2 in data['LedState'].values: # if 2, 470
                     NPM_470 = data
+
+                elif 4 in data['LedState'].values: # if 4, 560
+                    NPM_560 = data
 
         if type(NPM_415) == list: # if variable is list (i.e., no dataframe)
             continue
 
         else:
-            # curate and save NPM data
-            _curate_NPM_subdir(NPM_415, NPM_470, name=sub, save_path=sub_path)
+
+            if len(NPM_560) > 0:
+                _curate_NPM_subdir(NPM_415, NPM_470, name=sub+'_470', save_path=sub_path)
+                _curate_NPM_subdir(NPM_415, NPM_560, name=sub+'_560', save_path=sub_path)
+
+            else:
+                # curate and save NPM data
+                _curate_NPM_subdir(NPM_415, NPM_470, name=sub, save_path=sub_path)
     return
 
 
-def _curate_NPM_subdir(NPM_415, NPM_470, name, save_path):
+def _curate_NPM_subdir(control, signal, name, save_path):
 
     """
     Helper function combining _curate_and_save_NPM() and _drop_preTTL() functions into one step.
 
     Parameters
     ----------
-    NPM_415 : dataframe
+    control : dataframe
         dataframe containing the 415 data
 
-    NPM_470 : dataframe
-        dataframe containing the 470 data
+    signal : dataframe
+        dataframe containing the 470 or 560 data
 
     name : str
         subject name for the data, derived from the subdirectory folder names
@@ -85,13 +95,13 @@ def _curate_NPM_subdir(NPM_415, NPM_470, name, save_path):
     into new .csv files.
     """
 
-    if 1 not in NPM_415['LedState'].values:
-        raise Exception('Flag "17" not found in first input variable. Make sure that 415 and 470 are first and second input variables, respectively.')
+    if 1 not in control['LedState'].values:
+        raise Exception('"1" not found in LedState column. Make sure that 415 and 470/560 are first and second input variables, respectively.')
 
-    NPM_415_short = _drop_preTTL(NPM_415)
-    NPM_470_short = _drop_preTTL(NPM_470)
+    control_short = _drop_preTTL(control)
+    signal_short = _drop_preTTL(signal)
 
-    _curate_and_save_NPM(NPM_415_short, NPM_470_short, name, save_path)
+    _curate_and_save_NPM(control_short, signal_short, name, save_path)
     return
 
 
@@ -115,14 +125,19 @@ def _drop_preTTL(NPM_df):
     """
 
     TTL_idxs = NPM_df[NPM_df['Input0'] > 0]
-    First_TTL = TTL_idxs.index[0]
 
-    NPM_df_short = NPM_df.iloc[First_TTL-1:].reset_index()
+    if len(TTL_idxs.index[:]) > 1:
+        First_TTL = TTL_idxs.index[0]
+        NPM_df_short = NPM_df.iloc[First_TTL-1:].reset_index()
+
+    else:
+        NPM_df_short = NPM_df
+
     return NPM_df_short
 
 
 # Curate data and save as one new .csv file per region
-def _curate_and_save_NPM(NPM_415_short, NPM_470_short, name, save_path):
+def _curate_and_save_NPM(control_short, signal_short, name, save_path):
 
     """
     Helper function that takes shortened NPM (dropped preTTL) data and curates the data.
@@ -131,11 +146,11 @@ def _curate_and_save_NPM(NPM_415_short, NPM_470_short, name, save_path):
 
     Parameters
     ----------
-    NPM_415_short : dataframe
-        dataframe containing the 415 data that has dropped preTTL data
+    control_short : dataframe
+        dataframe containing the control data that has dropped preTTL data
 
-    NPM_470_short : dataframe
-        dataframe containing the 470 data that has dropped preTTL data
+    signal_short : dataframe
+        dataframe containing the signal that has dropped preTTL data
 
     name : str
         subject name for the data, derived from the subdirectory folder names
@@ -149,18 +164,18 @@ def _curate_and_save_NPM(NPM_415_short, NPM_470_short, name, save_path):
     into new .csv file
     """
 
-    regions_415 = NPM_415_short.columns[9:]
-    regions_470 = NPM_470_short.columns[9:]
-    tm.assert_index_equal(regions_415, regions_470)
+    regions_control = control_short.columns[8:]
+    regions_signal = signal_short.columns[8:]
+    tm.assert_index_equal(regions_control, regions_signal)
 
-    for region in regions_415:
+    for region in regions_control:
 
-        data_415 = NPM_415_short[region]
-        data_470 = NPM_470_short[region]
+        data_control = control_short[region]
+        data_signal = signal_short[region]
 
-        region_dict = {'Timestamp': NPM_415_short['Timestamp'],
-                   'Signal': data_470,
-                   'Control': data_415}
+        region_dict = {'Timestamp': control_short['Timestamp'],
+                   'Signal': data_signal,
+                   'Control': data_control}
 
         region_df = pd.DataFrame(data=region_dict)
         region_df = region_df.dropna()
